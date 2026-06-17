@@ -1,0 +1,63 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color: #2b1e18;
+    background: #fffaf0;
+    font-synthesis: none;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    min-width: 320px;
+    min-height: 100vh;
+    margin: 0;
+    background:
+      linear-gradient(90deg, rgba(63, 41, 29, 0.035) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(63, 41, 29, 0.03) 1px, transparent 1px),
+      linear-gradient(180deg, #fffaf0 0%, #f8ecd9 52%, #efe0c8 100%);
+    background-size: 34px 34px, 34px 34px, auto;
+  }
+
+  body::before {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    content: "";
+    opacity: 0.34;
+    background-image:
+      repeating-linear-gradient(0deg, rgba(43, 30, 24, 0.035) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(90deg, rgba(255, 250, 240, 0.55) 0 1px, transparent 1px 7px);
+    mix-blend-mode: multiply;
+  }
+
+  ::selection {
+    color: #fffaf0;
+    background: #573621;
+  }
+
+  button,
+  input,
+  select,
+  textarea {
+    font: inherit;
+  }
+}
+
+@layer components {
+  .focus-ring {
+    @apply outline-none ring-offset-2 ring-offset-bark-50 focus-visible:ring-2 focus-visible:ring-bark-500;
+  }
+
+  .app-stage,
+  .lock-stage {
+    background:
+      linear-gradient(135deg, rgba(255, 250, 240, 0.74), rgba(248, 236, 217, 0.82)),
+      repeating-linear-gradient(90deg, rgba(70, 81, 47, 0.04) 0 1px, transparent 1px 18px);
+  }
+}
