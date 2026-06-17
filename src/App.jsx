@@ -272,6 +272,57 @@ function paymentAwareOrder(order = {}) {
   };
 }
 
+function makeRevenueEvent(amount, type, createdAt = nowIso()) {
+  return {
+    id: makeId(),
+    amount: toNumber(amount),
+    type,
+    createdAt,
+  };
+}
+
+function getOrderRevenueEvents(order = {}) {
+  if (Array.isArray(order.revenueEvents)) {
+    return order.revenueEvents
+      .map((event) => ({
+        ...event,
+        amount: toNumber(event.amount),
+        createdAt: event.createdAt || order.updatedAt || order.createdAt || nowIso(),
+      }))
+      .filter((event) => event.amount !== 0);
+  }
+
+  const total = toNumber(order.totalAmount);
+  const payment = getOrderPayment(order);
+  const amount =
+    order.status === "completed"
+      ? total
+      : payment.paymentStatus === "paid"
+        ? total
+        : payment.paymentStatus === "partial"
+          ? payment.prepaidAmount
+          : 0;
+
+  return amount > 0
+    ? [
+        {
+          id: `${order.id || "order"}-legacy-revenue`,
+          amount,
+          type: "legacy",
+          createdAt: order.updatedAt || order.createdAt || nowIso(),
+        },
+      ]
+    : [];
+}
+
+function getOrderRevenueAmount(order = {}) {
+  return getOrderRevenueEvents(order).reduce((sum, event) => sum + toNumber(event.amount), 0);
+}
+
+function getRevenueDelta(order = {}, targetAmount) {
+  return toNumber(targetAmount) - getOrderRevenueAmount(order);
+}
+
 function instagramHandle(value = "") {
   const clean = value.trim();
   if (!clean) return "";
@@ -746,23 +797,23 @@ function DashboardPage({ products, orders, customers, go }) {
   const today = new Date();
   const month = today.getMonth();
   const year = today.getFullYear();
-  const paidOrders = orders.filter((order) => getOrderPayment(order).paymentStatus === "paid");
-  const revenueToday = paidOrders
-    .filter((order) => {
-      const date = new Date(order.updatedAt || order.createdAt);
+  const revenueEvents = orders.flatMap((order) => getOrderRevenueEvents(order));
+  const revenueToday = revenueEvents
+    .filter((event) => {
+      const date = new Date(event.createdAt);
       return (
         date.getFullYear() === year &&
         date.getMonth() === month &&
         date.getDate() === today.getDate()
       );
     })
-    .reduce((sum, order) => sum + toNumber(order.totalAmount), 0);
-  const revenueMonth = paidOrders
-    .filter((order) => {
-      const date = new Date(order.updatedAt || order.createdAt);
+    .reduce((sum, event) => sum + toNumber(event.amount), 0);
+  const revenueMonth = revenueEvents
+    .filter((event) => {
+      const date = new Date(event.createdAt);
       return date.getFullYear() === year && date.getMonth() === month;
     })
-    .reduce((sum, order) => sum + toNumber(order.totalAmount), 0);
+    .reduce((sum, event) => sum + toNumber(event.amount), 0);
 
   const recentOrders = [...orders]
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
@@ -1744,6 +1795,9 @@ function OrderDetailPage({
   const editablePayment = calculatePayment(order.totalAmount, editablePrepaid);
 
   const nextActions = [
+    order.status === "waiting_payment"
+      ? { label: "Chuyển sang đóng gói", status: "packing", icon: PackageOpen, variant: "secondary" }
+      : null,
     order.status === "paid"
       ? { label: "Chuyển sang đóng gói", status: "packing", icon: PackageOpen, variant: "secondary" }
       : null,
@@ -2364,9 +2418,6 @@ function AppShell({ children, view, go, settings, toast }) {
               <span className="block truncate text-base font-black text-bark-900">
                 {settings.shopName || "banduthu"}
               </span>
-              <span className="block truncate text-xs font-black uppercase tracking-[0.06em] text-clay-700">
-                Shopee · Instagram · VietQR
-              </span>
             </span>
           </button>
           <div className="hidden items-center gap-1 rounded-lg border border-bark-100 bg-cream-50/70 p-1 lg:flex">
@@ -2717,6 +2768,16 @@ export default function App() {
     const payment = calculatePayment(totalAmount, prepaidAmount);
     const nextPaymentStatus = paymentStatus || payment.paymentStatus;
     const nextStatus = nextPaymentStatus === "paid" ? "paid" : "waiting_payment";
+    const revenueEvents =
+      payment.prepaidAmount > 0
+        ? [
+            makeRevenueEvent(
+              payment.prepaidAmount,
+              nextPaymentStatus === "paid" ? "paid" : "deposit",
+              timestamp,
+            ),
+          ]
+        : [];
     const order = {
       id: makeId(),
       orderCode: makeOrderCode(orders),
@@ -2742,6 +2803,7 @@ export default function App() {
       remainingAmount: remainingAmount ?? payment.remainingAmount,
       status: nextStatus,
       paymentStatus: nextPaymentStatus,
+      revenueEvents,
       transferContent,
       qrImageUrl,
       createdAt: timestamp,
@@ -2769,6 +2831,18 @@ export default function App() {
     if (!order) return;
     const timestamp = nowIso();
     const payment = calculatePayment(order.totalAmount, prepaidAmount);
+    const revenueDelta = getRevenueDelta(order, payment.prepaidAmount);
+    const nextRevenueEvents =
+      revenueDelta !== 0
+        ? [
+            ...getOrderRevenueEvents(order),
+            makeRevenueEvent(
+              revenueDelta,
+              payment.paymentStatus === "paid" ? "paid" : "deposit",
+              timestamp,
+            ),
+          ]
+        : getOrderRevenueEvents(order);
     const nextStatus =
       order.status === "cancelled"
         ? "cancelled"
@@ -2788,6 +2862,7 @@ export default function App() {
               prepaidAmount: payment.prepaidAmount,
               remainingAmount: payment.remainingAmount,
               paymentStatus: payment.paymentStatus,
+              revenueEvents: nextRevenueEvents,
               status: nextStatus,
               qrImageUrl: nextQrUrl,
               updatedAt: timestamp,
@@ -2856,19 +2931,54 @@ export default function App() {
   const setOrderStatus = (orderId, status) => {
     const order = orders.find((item) => item.id === orderId);
     const timestamp = nowIso();
+    const shouldComplete = status === "completed" && order;
+    const completedPayment = shouldComplete
+      ? calculatePayment(order.totalAmount, order.totalAmount)
+      : null;
+    const completionRevenueDelta = shouldComplete
+      ? getRevenueDelta(order, order.totalAmount)
+      : 0;
+    const completionRevenueEvents =
+      shouldComplete && completionRevenueDelta !== 0
+        ? [
+            ...getOrderRevenueEvents(order),
+            makeRevenueEvent(completionRevenueDelta, "completion", timestamp),
+          ]
+        : shouldComplete
+          ? getOrderRevenueEvents(order)
+          : null;
+
     setOrders((current) =>
       current.map((item) =>
         item.id === orderId
           ? {
               ...item,
               status,
+              ...(shouldComplete
+                ? {
+                    prepaidAmount: completedPayment.prepaidAmount,
+                    remainingAmount: completedPayment.remainingAmount,
+                    paymentStatus: completedPayment.paymentStatus,
+                    revenueEvents: completionRevenueEvents,
+                  }
+                : {}),
               updatedAt: timestamp,
             }
           : item,
       ),
     );
 
-    if (status === "cancelled" && order?.paymentStatus !== "paid") {
+    if (shouldComplete) {
+      setProducts((current) =>
+        current.map((product) =>
+          order.items.some((item) => item.id === product.id)
+            ? { ...product, status: "sold", updatedAt: timestamp }
+            : product,
+        ),
+      );
+    }
+
+    if (status === "cancelled" && order && order.paymentStatus !== "paid") {
       setProducts((current) =>
         current.map((product) =>
           order.items.some((item) => item.id === product.id)
