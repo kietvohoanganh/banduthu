@@ -104,7 +104,8 @@ const QR_TEMPLATES = ["compact2", "compact", "qr_only", "print"];
 const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
 const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
 const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
-const SUPABASE_STATE_ID = "default";
+const CLOUD_STATE_ID = "main";
+const LEGACY_CLOUD_STATE_ID = "default";
 
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
@@ -114,10 +115,15 @@ function getSupabaseEndpoint(path) {
   return `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`;
 }
 
-async function fetchCloudState() {
+function isCloudPayloadEmpty(payload) {
+  if (!payload || typeof payload !== "object") return true;
+  return Object.keys(payload).length === 0;
+}
+
+async function fetchCloudStateRow(rowId) {
   const response = await fetch(
     getSupabaseEndpoint(
-      `seller_app_state?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload`,
+      `seller_app_state?id=eq.${encodeURIComponent(rowId)}&select=payload`,
     ),
     {
       headers: {
@@ -135,8 +141,26 @@ async function fetchCloudState() {
   return rows?.[0]?.payload || null;
 }
 
+async function loadCloudState() {
+  console.log("Loading cloud state from row:", CLOUD_STATE_ID);
+  const mainPayload = await fetchCloudStateRow(CLOUD_STATE_ID);
+
+  if (!isCloudPayloadEmpty(mainPayload)) {
+    return mainPayload;
+  }
+
+  const legacyPayload = await fetchCloudStateRow(LEGACY_CLOUD_STATE_ID);
+  if (!isCloudPayloadEmpty(legacyPayload)) {
+    await saveCloudState(legacyPayload);
+    return legacyPayload;
+  }
+
+  return mainPayload;
+}
+
 async function saveCloudState(payload) {
-  const response = await fetch(getSupabaseEndpoint("seller_app_state"), {
+  console.log("Saving cloud state to row:", CLOUD_STATE_ID);
+  const response = await fetch(getSupabaseEndpoint("seller_app_state?on_conflict=id"), {
     method: "POST",
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -145,7 +169,7 @@ async function saveCloudState(payload) {
       Prefer: "resolution=merge-duplicates",
     },
     body: JSON.stringify({
-      id: SUPABASE_STATE_ID,
+      id: CLOUD_STATE_ID,
       payload,
       updated_at: new Date().toISOString(),
     }),
@@ -2228,6 +2252,9 @@ function SettingsPage({
           )}
         >
           <h2 className="text-lg font-black text-bark-900">Cloud database</h2>
+          <p className="rounded-lg border border-bark-200/70 bg-cream-50/80 px-3 py-2 text-sm font-bold text-bark-700">
+            Cloud row: {CLOUD_STATE_ID}
+          </p>
           {cloudConfigured ? (
             <p className="text-sm leading-6 text-moss-700">
               Supabase đã được cấu hình. {cloudStatus}
@@ -2422,7 +2449,7 @@ export default function App() {
     let cancelled = false;
     setCloudStatus("Đang tải dữ liệu cloud.");
 
-    fetchCloudState()
+    loadCloudState()
       .then((payload) => {
         if (cancelled) return;
 

@@ -27,3 +27,7 @@ for update
 to anon
 using (true)
 with check (true);
+
+insert into public.seller_app_state (id, payload)
+values ('main', '{}'::jsonb)
+on conflict (id) do nothing;

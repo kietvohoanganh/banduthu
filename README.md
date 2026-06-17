@@ -94,7 +94,7 @@ VITE_SUPABASE_ANON_KEY=YOUR_ANON_PUBLIC_KEY
 10. Add the same variables in Vercel under **Project Settings** → **Environment Variables**.
 11. Redeploy the Vercel project.
 
-When Supabase is configured, the app stores a JSON snapshot in the `seller_app_state` table. If Supabase is not configured or is unreachable, the app continues using browser LocalStorage.
+When Supabase is configured, the app stores a JSON snapshot in the `seller_app_state` table using row `id = main`. If Supabase is not configured or is unreachable, the app continues using browser LocalStorage.
 
 ## Backup Before Migration
 
