@@ -323,6 +323,33 @@ function getRevenueDelta(order = {}, targetAmount) {
   return toNumber(targetAmount) - getOrderRevenueAmount(order);
 }
 
+function getOrderCost(order = {}, products = []) {
+  const productCostById = new Map(products.map((product) => [product.id, toNumber(product.costPrice)]));
+  return (order.items || []).reduce(
+    (sum, item) => sum + toNumber(item.costPrice ?? productCostById.get(item.id) ?? 0),
+    0,
+  );
+}
+
+function subtractCostOnceFromEvents(events = [], cost = 0) {
+  let remainingCost = toNumber(cost);
+
+  return events.map((event) => {
+    if (remainingCost <= 0 || toNumber(event.amount) <= 0) return event;
+
+    const nextEvent = {
+      ...event,
+      amount: toNumber(event.amount) - remainingCost,
+    };
+    remainingCost = 0;
+    return nextEvent;
+  });
+}
+
+function getOrderNetRevenueEvents(order = {}, products = []) {
+  return subtractCostOnceFromEvents(getOrderRevenueEvents(order), getOrderCost(order, products));
+}
+
 function getDirectProductRevenueEvents(products = [], orders = []) {
   const orderedProductIds = new Set(
     orders.flatMap((order) => (order.items || []).map((item) => item.id)),
@@ -336,7 +363,7 @@ function getDirectProductRevenueEvents(products = [], orders = []) {
     )
     .map((product) => ({
       id: `${product.id}-direct-sale`,
-      amount: toNumber(product.directRevenueAmount ?? product.sellingPrice),
+      amount: toNumber(product.directRevenueAmount ?? product.sellingPrice) - toNumber(product.costPrice),
       type: "direct_product_sale",
       createdAt: product.directRevenueAt || product.updatedAt || product.createdAt || nowIso(),
     }));
@@ -817,7 +844,7 @@ function DashboardPage({ products, orders, customers, go }) {
   const month = today.getMonth();
   const year = today.getFullYear();
   const revenueEvents = [
-    ...orders.flatMap((order) => getOrderRevenueEvents(order)),
+    ...orders.flatMap((order) => getOrderNetRevenueEvents(order, products)),
     ...getDirectProductRevenueEvents(products, orders),
   ];
   const revenueToday = revenueEvents
@@ -2843,6 +2870,7 @@ export default function App() {
         size: product.size,
         color: product.color,
         condition: product.condition,
+        costPrice: toNumber(product.costPrice),
         sellingPrice: toNumber(product.sellingPrice),
         imageUrl: product.imageUrl,
       })),
