@@ -323,6 +323,25 @@ function getRevenueDelta(order = {}, targetAmount) {
   return toNumber(targetAmount) - getOrderRevenueAmount(order);
 }
 
+function getDirectProductRevenueEvents(products = [], orders = []) {
+  const orderedProductIds = new Set(
+    orders.flatMap((order) => (order.items || []).map((item) => item.id)),
+  );
+
+  return products
+    .filter(
+      (product) =>
+        product.status === "sold" &&
+        !orderedProductIds.has(product.id),
+    )
+    .map((product) => ({
+      id: `${product.id}-direct-sale`,
+      amount: toNumber(product.directRevenueAmount ?? product.sellingPrice),
+      type: "direct_product_sale",
+      createdAt: product.directRevenueAt || product.updatedAt || product.createdAt || nowIso(),
+    }));
+}
+
 function instagramHandle(value = "") {
   const clean = value.trim();
   if (!clean) return "";
@@ -797,7 +816,10 @@ function DashboardPage({ products, orders, customers, go }) {
   const today = new Date();
   const month = today.getMonth();
   const year = today.getFullYear();
-  const revenueEvents = orders.flatMap((order) => getOrderRevenueEvents(order));
+  const revenueEvents = [
+    ...orders.flatMap((order) => getOrderRevenueEvents(order)),
+    ...getDirectProductRevenueEvents(products, orders),
+  ];
   const revenueToday = revenueEvents
     .filter((event) => {
       const date = new Date(event.createdAt);
@@ -2711,12 +2733,41 @@ export default function App() {
   };
 
   const updateProductStatus = (id, status) => {
-    setProducts((current) =>
-      current.map((product) =>
-        product.id === id ? { ...product, status, updatedAt: nowIso() } : product,
-      ),
+    const orderedProductIds = new Set(
+      orders.flatMap((order) => (order.items || []).map((item) => item.id)),
     );
-    setToast("Đã cập nhật sản phẩm");
+    const timestamp = nowIso();
+
+    setProducts((current) =>
+      current.map((product) => {
+        if (product.id !== id) return product;
+
+        const shouldAddDirectRevenue =
+          status === "sold" &&
+          product.status !== "sold" &&
+          !orderedProductIds.has(product.id);
+        const shouldRemoveDirectRevenue = status !== "sold" && product.directRevenueAmount;
+
+        const nextProduct = {
+          ...product,
+          status,
+          updatedAt: timestamp,
+        };
+
+        if (shouldAddDirectRevenue) {
+          nextProduct.directRevenueAmount = toNumber(product.sellingPrice);
+          nextProduct.directRevenueAt = timestamp;
+        }
+
+        if (shouldRemoveDirectRevenue) {
+          delete nextProduct.directRevenueAmount;
+          delete nextProduct.directRevenueAt;
+        }
+
+        return nextProduct;
+      }),
+    );
+    setToast(status === "sold" ? "Đã bán và ghi nhận doanh thu" : "Đã cập nhật sản phẩm");
   };
 
   const saveCustomer = (form) => {
