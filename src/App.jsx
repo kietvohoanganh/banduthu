@@ -17,7 +17,6 @@ import {
   Instagram,
   KeyRound,
   ListFilter,
-  LockKeyhole,
   LogOut,
   PackageCheck,
   PackageOpen,
@@ -494,6 +493,16 @@ function EmptyState({ icon: Icon, title, text, action }) {
   );
 }
 
+function ShopLogo({ className }) {
+  return (
+    <img
+      alt="Banduthu 2HAND"
+      className={cn("h-full w-full rounded-lg object-cover", className)}
+      src="/shop-logo.svg"
+    />
+  );
+}
+
 function ConfirmDeleteOrderModal({ order, onCancel, onConfirm }) {
   if (!order) return null;
 
@@ -620,7 +629,7 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
             <div className="mb-7 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
                 <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
-                  <LockKeyhole className="h-5 w-5" />
+                  <ShopLogo />
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-clay-700">
@@ -2349,7 +2358,7 @@ function AppShell({ children, view, go, settings, toast }) {
             onClick={() => go("dashboard")}
           >
             <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition group-hover:rotate-2">
-              <ShoppingBag className="h-5 w-5" />
+              <ShopLogo />
             </span>
             <span className="min-w-0">
               <span className="block truncate text-base font-black text-bark-900">
