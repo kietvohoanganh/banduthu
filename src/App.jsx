@@ -50,7 +50,7 @@ const LOCK_KEYS = {
 };
 
 const DEFAULT_SETTINGS = {
-  shopName: "Nâu Vintage",
+  shopName: "banduthu",
   bankId: "MBBank",
   accountNo: "123456789",
   accountName: "NGUYEN VAN A",
@@ -633,7 +633,7 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
                 </span>
                 <div className="min-w-0">
                   <p className="truncate text-sm font-black uppercase tracking-[0.12em] text-clay-700">
-                    {settings.shopName || "Nâu Vintage"}
+                    {settings.shopName || "banduthu"}
                   </p>
                   <p className="text-xs font-bold text-bark-500">Dashboard bán hàng</p>
                 </div>
@@ -2362,7 +2362,7 @@ function AppShell({ children, view, go, settings, toast }) {
             </span>
             <span className="min-w-0">
               <span className="block truncate text-base font-black text-bark-900">
-                {settings.shopName || "Shop secondhand"}
+                {settings.shopName || "banduthu"}
               </span>
               <span className="block truncate text-xs font-black uppercase tracking-[0.06em] text-clay-700">
                 Shopee · Instagram · VietQR
