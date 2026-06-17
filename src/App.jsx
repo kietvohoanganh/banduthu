@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
   Banknote,
@@ -101,8 +101,59 @@ const STATUS_TONES = {
 
 const QR_TEMPLATES = ["compact2", "compact", "qr_only", "print"];
 
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "";
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "";
+const SUPABASE_CONFIGURED = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
+const SUPABASE_STATE_ID = "default";
+
 function cn(...classes) {
   return classes.filter(Boolean).join(" ");
+}
+
+function getSupabaseEndpoint(path) {
+  return `${SUPABASE_URL.replace(/\/$/, "")}/rest/v1/${path}`;
+}
+
+async function fetchCloudState() {
+  const response = await fetch(
+    getSupabaseEndpoint(
+      `seller_app_state?id=eq.${encodeURIComponent(SUPABASE_STATE_ID)}&select=payload`,
+    ),
+    {
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+    },
+  );
+
+  if (!response.ok) {
+    throw new Error("Không đọc được dữ liệu Supabase.");
+  }
+
+  const rows = await response.json();
+  return rows?.[0]?.payload || null;
+}
+
+async function saveCloudState(payload) {
+  const response = await fetch(getSupabaseEndpoint("seller_app_state"), {
+    method: "POST",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      Prefer: "resolution=merge-duplicates",
+    },
+    body: JSON.stringify({
+      id: SUPABASE_STATE_ID,
+      payload,
+      updated_at: new Date().toISOString(),
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error("Không lưu được dữ liệu Supabase.");
+  }
 }
 
 function useLocalStorageState(key, initialValue) {
@@ -2022,10 +2073,21 @@ function QrGeneratorPage({ settings, onCopy, onDownload }) {
   );
 }
 
-function SettingsPage({ settings, onSave, go, onLockApp, onChangePassword }) {
+function SettingsPage({
+  settings,
+  onSave,
+  go,
+  onLockApp,
+  onChangePassword,
+  cloudConfigured,
+  cloudStatus,
+  onExportData,
+  onImportData,
+}) {
   const [form, setForm] = useState(settings);
   const [passwordForm, setPasswordForm] = useState({ newPassword: "", confirmPassword: "" });
   const [passwordMessage, setPasswordMessage] = useState("");
+  const importInputRef = useRef(null);
 
   useEffect(() => {
     setForm(settings);
@@ -2123,6 +2185,60 @@ function SettingsPage({ settings, onSave, go, onLockApp, onChangePassword }) {
           </Button>
         </Panel>
       </form>
+
+      <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
+        <Panel className="grid gap-4">
+          <div className="flex items-start gap-3">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-moss-700 text-white">
+              <Boxes className="h-5 w-5" />
+            </span>
+            <div>
+              <h2 className="text-lg font-black text-bark-900">Sao lưu dữ liệu</h2>
+              <p className="mt-1 text-sm leading-6 text-bark-600">
+                Xuất dữ liệu trước khi đổi máy hoặc chuyển sang Supabase.
+              </p>
+            </div>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Button icon={Download} onClick={onExportData} type="button" variant="secondary">
+              Export JSON
+            </Button>
+            <Button
+              icon={Clipboard}
+              onClick={() => importInputRef.current?.click()}
+              type="button"
+              variant="secondary"
+            >
+              Import JSON
+            </Button>
+          </div>
+          <input
+            accept="application/json,.json"
+            className="hidden"
+            onChange={onImportData}
+            ref={importInputRef}
+            type="file"
+          />
+        </Panel>
+
+        <Panel
+          className={cn(
+            "grid content-start gap-3",
+            cloudConfigured ? "border-moss-100 bg-moss-100/80" : "border-clay-200 bg-clay-100/80",
+          )}
+        >
+          <h2 className="text-lg font-black text-bark-900">Cloud database</h2>
+          {cloudConfigured ? (
+            <p className="text-sm leading-6 text-moss-700">
+              Supabase đã được cấu hình. {cloudStatus}
+            </p>
+          ) : (
+            <p className="text-sm leading-6 text-clay-700">
+              Cloud database is not configured. Data is currently saved on this browser only.
+            </p>
+          )}
+        </Panel>
+      </div>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <Panel className="grid gap-4">
@@ -2288,12 +2404,72 @@ export default function App() {
   const [view, setView] = useState({ page: "dashboard" });
   const [toast, setToast] = useState("");
   const [deleteOrderCandidate, setDeleteOrderCandidate] = useState(null);
+  const [cloudStatus, setCloudStatus] = useState(
+    SUPABASE_CONFIGURED ? "Đang kiểm tra kết nối." : "",
+  );
+  const hasLoadedCloudRef = useRef(!SUPABASE_CONFIGURED);
+  const cloudSaveTimerRef = useRef(null);
 
   useEffect(() => {
     if (!toast) return undefined;
     const timer = window.setTimeout(() => setToast(""), 2400);
     return () => window.clearTimeout(timer);
   }, [toast]);
+
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED) return undefined;
+
+    let cancelled = false;
+    setCloudStatus("Đang tải dữ liệu cloud.");
+
+    fetchCloudState()
+      .then((payload) => {
+        if (cancelled) return;
+
+        if (payload) {
+          setProducts(Array.isArray(payload.products) ? payload.products : []);
+          setCustomers(Array.isArray(payload.customers) ? payload.customers : []);
+          setOrders(Array.isArray(payload.orders) ? payload.orders : []);
+          setSettings(payload.settings || DEFAULT_SETTINGS);
+          setCloudStatus("Đã tải dữ liệu cloud.");
+        } else {
+          setCloudStatus("Chưa có dữ liệu cloud. App sẽ tạo bản sao từ trình duyệt này.");
+        }
+
+        hasLoadedCloudRef.current = true;
+      })
+      .catch(() => {
+        if (cancelled) return;
+        hasLoadedCloudRef.current = true;
+        setCloudStatus("Không kết nối được Supabase. App vẫn dùng dữ liệu trên trình duyệt.");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [setProducts, setCustomers, setOrders, setSettings]);
+
+  useEffect(() => {
+    if (!SUPABASE_CONFIGURED || !hasLoadedCloudRef.current) return undefined;
+
+    if (cloudSaveTimerRef.current) {
+      window.clearTimeout(cloudSaveTimerRef.current);
+    }
+
+    cloudSaveTimerRef.current = window.setTimeout(() => {
+      saveCloudState({ products, customers, orders, settings })
+        .then(() => setCloudStatus("Đã lưu dữ liệu cloud."))
+        .catch(() =>
+          setCloudStatus("Không lưu được lên Supabase. Dữ liệu vẫn được giữ trên trình duyệt."),
+        );
+    }, 800);
+
+    return () => {
+      if (cloudSaveTimerRef.current) {
+        window.clearTimeout(cloudSaveTimerRef.current);
+      }
+    };
+  }, [products, customers, orders, settings]);
 
   const go = (page, options = {}) => {
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2328,6 +2504,60 @@ export default function App() {
     link.click();
     document.body.removeChild(link);
     setToast("Đã mở tải ảnh QR");
+  };
+
+  const exportData = () => {
+    const payload = {
+      app: "secondhand-ig-seller",
+      exportedAt: nowIso(),
+      products,
+      customers,
+      orders,
+      settings,
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `secondhand-backup-${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    setToast("Đã export dữ liệu JSON");
+  };
+
+  const importData = (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const payload = JSON.parse(String(reader.result || "{}"));
+        if (
+          !Array.isArray(payload.products) ||
+          !Array.isArray(payload.customers) ||
+          !Array.isArray(payload.orders) ||
+          !payload.settings
+        ) {
+          throw new Error("Invalid backup");
+        }
+
+        setProducts(payload.products);
+        setCustomers(payload.customers);
+        setOrders(payload.orders);
+        setSettings(payload.settings);
+        setToast("Đã import dữ liệu JSON");
+      } catch {
+        setToast("File import không hợp lệ");
+      } finally {
+        event.target.value = "";
+      }
+    };
+    reader.readAsText(file);
   };
 
   const setupLockPassword = async (password) => {
@@ -2677,8 +2907,12 @@ export default function App() {
       case "settings":
         return (
           <SettingsPage
+            cloudConfigured={SUPABASE_CONFIGURED}
+            cloudStatus={cloudStatus}
             go={go}
             onChangePassword={changeLockPassword}
+            onExportData={exportData}
+            onImportData={importData}
             onLockApp={lockApp}
             onSave={saveSettings}
             settings={settings}
