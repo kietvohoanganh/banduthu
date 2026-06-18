@@ -4,23 +4,35 @@
 
 @layer base {
   :root {
-    color: #2b1e18;
-    background: #fffaf0;
+    color: #24160e;
+    background: #faf6ef;
     font-synthesis: none;
     text-rendering: optimizeLegibility;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
     min-width: 320px;
-    min-height: 100vh;
+    min-height: 100dvh;
     margin: 0;
     background:
-      linear-gradient(90deg, rgba(63, 41, 29, 0.035) 1px, transparent 1px),
-      linear-gradient(180deg, rgba(63, 41, 29, 0.03) 1px, transparent 1px),
-      linear-gradient(180deg, #fffaf0 0%, #f8ecd9 52%, #efe0c8 100%);
-    background-size: 34px 34px, 34px 34px, auto;
+      radial-gradient(circle at 22px 20px, rgba(58, 36, 21, 0.13) 0 3px, transparent 4px),
+      radial-gradient(circle at 16px 15px, rgba(200, 138, 69, 0.14) 0 5px, transparent 6px),
+      radial-gradient(circle at 28px 15px, rgba(200, 138, 69, 0.14) 0 5px, transparent 6px),
+      radial-gradient(circle at 16px 27px, rgba(141, 94, 52, 0.11) 0 5px, transparent 6px),
+      radial-gradient(circle at 28px 27px, rgba(141, 94, 52, 0.11) 0 5px, transparent 6px),
+      radial-gradient(circle at 12% -10%, rgba(214, 168, 90, 0.24), transparent 34rem),
+      radial-gradient(circle at 92% 4%, rgba(95, 138, 95, 0.12), transparent 28rem),
+      linear-gradient(90deg, rgba(58, 36, 21, 0.035) 1px, transparent 1px),
+      linear-gradient(180deg, rgba(58, 36, 21, 0.03) 1px, transparent 1px),
+      linear-gradient(180deg, #fffdf8 0%, #faf6ef 44%, #f7f1e8 100%);
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, center, center, 0 0, 0 0, center;
+    background-size: 132px 132px, 132px 132px, 132px 132px, 132px 132px, 132px 132px, auto, auto, 36px 36px, 36px 36px, auto;
   }
 
   body::before {
@@ -29,16 +41,16 @@
     z-index: -1;
     pointer-events: none;
     content: "";
-    opacity: 0.34;
+    opacity: 0.24;
     background-image:
-      repeating-linear-gradient(0deg, rgba(43, 30, 24, 0.035) 0 1px, transparent 1px 5px),
-      repeating-linear-gradient(90deg, rgba(255, 250, 240, 0.55) 0 1px, transparent 1px 7px);
+      repeating-linear-gradient(0deg, rgba(36, 22, 14, 0.04) 0 1px, transparent 1px 5px),
+      repeating-linear-gradient(90deg, rgba(255, 253, 248, 0.62) 0 1px, transparent 1px 7px);
     mix-blend-mode: multiply;
   }
 
   ::selection {
-    color: #fffaf0;
-    background: #573621;
+    color: #fffdf8;
+    background: #6b4423;
   }
 
   button,
@@ -47,17 +59,141 @@
   textarea {
     font: inherit;
   }
+
+  * {
+    box-sizing: border-box;
+  }
 }
 
 @layer components {
   .focus-ring {
-    @apply outline-none ring-offset-2 ring-offset-bark-50 focus-visible:ring-2 focus-visible:ring-bark-500;
+    @apply outline-none ring-offset-2 ring-offset-cream-50 focus-visible:ring-2 focus-visible:ring-clay-500;
   }
 
   .app-stage,
   .lock-stage {
+    position: relative;
+    isolation: isolate;
     background:
-      linear-gradient(135deg, rgba(255, 250, 240, 0.74), rgba(248, 236, 217, 0.82)),
-      repeating-linear-gradient(90deg, rgba(70, 81, 47, 0.04) 0 1px, transparent 1px 18px);
+      radial-gradient(circle at 18% 8%, rgba(200, 138, 69, 0.16), transparent 24rem),
+      radial-gradient(circle at 82% 18%, rgba(95, 138, 95, 0.10), transparent 22rem),
+      linear-gradient(135deg, rgba(255, 253, 248, 0.74), rgba(247, 241, 232, 0.86)),
+      repeating-linear-gradient(90deg, rgba(79, 111, 69, 0.035) 0 1px, transparent 1px 18px);
+  }
+
+  .app-stage::before,
+  .lock-stage::before {
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    content: "";
+    opacity: 0.72;
+    background-image:
+      radial-gradient(circle at 44px 40px, rgba(58, 36, 21, 0.16) 0 3px, transparent 4px),
+      radial-gradient(circle at 36px 32px, rgba(200, 138, 69, 0.16) 0 7px, transparent 8px),
+      radial-gradient(circle at 52px 32px, rgba(200, 138, 69, 0.16) 0 7px, transparent 8px),
+      radial-gradient(circle at 36px 48px, rgba(107, 68, 35, 0.12) 0 7px, transparent 8px),
+      radial-gradient(circle at 52px 48px, rgba(107, 68, 35, 0.12) 0 7px, transparent 8px),
+      radial-gradient(circle at 148px 102px, rgba(58, 36, 21, 0.12) 0 2px, transparent 3px),
+      radial-gradient(circle at 142px 96px, rgba(200, 138, 69, 0.12) 0 5px, transparent 6px),
+      radial-gradient(circle at 154px 96px, rgba(200, 138, 69, 0.12) 0 5px, transparent 6px),
+      radial-gradient(circle at 142px 108px, rgba(107, 68, 35, 0.10) 0 5px, transparent 6px),
+      radial-gradient(circle at 154px 108px, rgba(107, 68, 35, 0.10) 0 5px, transparent 6px);
+    background-size: 210px 210px;
+  }
+
+  .app-stage > *,
+  .lock-stage > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .tap-transition {
+    @apply transition duration-300 ease-[cubic-bezier(0.32,0.72,0,1)];
+  }
+
+  .floral-card {
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .floral-card::before {
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    content: "";
+    opacity: 0.55;
+    background-image:
+      radial-gradient(circle at 24px 24px, rgba(58, 36, 21, 0.13) 0 2px, transparent 3px),
+      radial-gradient(circle at 19px 19px, rgba(200, 138, 69, 0.16) 0 4px, transparent 5px),
+      radial-gradient(circle at 29px 19px, rgba(200, 138, 69, 0.16) 0 4px, transparent 5px),
+      radial-gradient(circle at 19px 29px, rgba(107, 68, 35, 0.11) 0 4px, transparent 5px),
+      radial-gradient(circle at 29px 29px, rgba(107, 68, 35, 0.11) 0 4px, transparent 5px);
+    background-position: right 18px top 16px;
+    background-repeat: no-repeat;
+    background-size: 104px 104px;
+  }
+
+  .floral-card > * {
+    position: relative;
+    z-index: 1;
+  }
+
+  .flower-garland {
+    position: relative;
+    width: min(32vw, 260px);
+    height: 34px;
+    opacity: 0.88;
+    background:
+      radial-gradient(circle at 20px 17px, #6b4423 0 3px, transparent 4px),
+      radial-gradient(circle at 14px 11px, rgba(200, 138, 69, 0.72) 0 6px, transparent 7px),
+      radial-gradient(circle at 26px 11px, rgba(200, 138, 69, 0.72) 0 6px, transparent 7px),
+      radial-gradient(circle at 14px 23px, rgba(141, 94, 52, 0.58) 0 6px, transparent 7px),
+      radial-gradient(circle at 26px 23px, rgba(141, 94, 52, 0.58) 0 6px, transparent 7px);
+    background-size: 58px 34px;
+    background-repeat: repeat-x;
+  }
+
+  .flower-garland::after {
+    position: absolute;
+    right: 2px;
+    bottom: 0;
+    left: 2px;
+    height: 1px;
+    content: "";
+    background: linear-gradient(90deg, transparent, rgba(107, 68, 35, 0.35), transparent);
+  }
+
+  .flower-stamp {
+    background-image:
+      radial-gradient(circle at 50% 50%, rgba(58, 36, 21, 0.24) 0 8%, transparent 9%),
+      radial-gradient(circle at 50% 22%, rgba(200, 138, 69, 0.34) 0 18%, transparent 19%),
+      radial-gradient(circle at 78% 50%, rgba(200, 138, 69, 0.34) 0 18%, transparent 19%),
+      radial-gradient(circle at 50% 78%, rgba(107, 68, 35, 0.22) 0 18%, transparent 19%),
+      radial-gradient(circle at 22% 50%, rgba(107, 68, 35, 0.22) 0 18%, transparent 19%),
+      linear-gradient(135deg, rgba(255, 253, 248, 0.92), rgba(234, 219, 201, 0.78));
+  }
+
+  .money-figures {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .soft-scrollbar {
+    scrollbar-color: rgba(107, 68, 35, 0.34) transparent;
+  }
+
+  .soft-scrollbar::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+
+  .soft-scrollbar::-webkit-scrollbar-thumb {
+    background: rgba(107, 68, 35, 0.28);
+    border: 3px solid transparent;
+    border-radius: 999px;
+    background-clip: padding-box;
   }
 }

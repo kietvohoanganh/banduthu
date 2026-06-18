@@ -257,8 +257,26 @@ function calculatePayment(totalAmount, prepaidAmount = 0) {
   };
 }
 
+function getOrderTotalAmount(order = {}) {
+  const savedTotal = toNumber(order.totalAmount);
+  if (savedTotal > 0) return savedTotal;
+
+  return Math.max(
+    0,
+    toNumber(order.subtotal) + toNumber(order.shippingFee) - toNumber(order.discount),
+  );
+}
+
 function getOrderPayment(order = {}) {
-  const total = toNumber(order.totalAmount);
+  const total = getOrderTotalAmount(order);
+  if (order.paymentStatus === "refunded") {
+    return {
+      prepaidAmount: 0,
+      remainingAmount: 0,
+      paymentStatus: "refunded",
+    };
+  }
+
   const fallbackPrepaid = order.paymentStatus === "paid" ? total : 0;
   return calculatePayment(total, order.prepaidAmount ?? fallbackPrepaid);
 }
@@ -292,7 +310,9 @@ function getOrderRevenueEvents(order = {}) {
       .filter((event) => event.amount !== 0);
   }
 
-  const total = toNumber(order.totalAmount);
+  if (order.status === "cancelled") return [];
+
+  const total = getOrderTotalAmount(order);
   const payment = getOrderPayment(order);
   const amount =
     order.status === "completed"
@@ -347,7 +367,8 @@ function subtractCostOnceFromEvents(events = [], cost = 0) {
 }
 
 function getOrderNetRevenueEvents(order = {}, products = []) {
-  return subtractCostOnceFromEvents(getOrderRevenueEvents(order), getOrderCost(order, products));
+  const orderCost = order.status === "cancelled" ? 0 : getOrderCost(order, products);
+  return subtractCostOnceFromEvents(getOrderRevenueEvents(order), orderCost);
 }
 
 function getDirectProductRevenueEvents(products = [], orders = []) {
@@ -448,7 +469,7 @@ function statusBadge(label, status) {
   return (
     <span
       className={cn(
-        "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-bold shadow-[inset_0_1px_0_rgba(255,255,255,0.55)]",
+        "money-figures inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-black tracking-[0.01em] shadow-[inset_0_1px_0_rgba(255,255,255,0.62)]",
         STATUS_TONES[status] || "bg-bark-100 text-bark-700 border-bark-100",
       )}
     >
@@ -460,26 +481,26 @@ function statusBadge(label, status) {
 function Button({ children, icon: Icon, variant = "primary", size = "md", className, ...props }) {
   const variants = {
     primary:
-      "bg-bark-800 text-bark-50 hover:bg-bark-900 border-bark-900 shadow-[0_10px_24px_rgba(63,41,29,0.22),inset_0_1px_0_rgba(255,255,255,0.16)]",
+      "border-bark-800 bg-[linear-gradient(135deg,#6b4423,#3a2415)] text-cream-50 shadow-[0_14px_30px_rgba(58,36,21,0.24),inset_0_1px_0_rgba(255,255,255,0.18)] hover:shadow-[0_18px_38px_rgba(58,36,21,0.30),inset_0_1px_0_rgba(255,255,255,0.18)]",
     secondary:
-      "bg-cream-100 text-bark-900 hover:bg-bark-50 border-bark-200 shadow-[0_8px_20px_rgba(63,41,29,0.08),inset_0_1px_0_rgba(255,255,255,0.65)]",
-    ghost: "bg-transparent text-bark-700 hover:bg-bark-100/70 border-transparent",
+      "border-bark-200/80 bg-cream-50/90 text-bark-800 shadow-[0_10px_24px_rgba(58,36,21,0.08),inset_0_1px_0_rgba(255,255,255,0.85)] hover:border-clay-500/60 hover:bg-white",
+    ghost: "border-transparent bg-transparent text-bark-700 hover:border-bark-100 hover:bg-bark-50/80",
     danger:
-      "bg-rose-800 text-white hover:bg-rose-900 border-rose-900 shadow-[0_10px_24px_rgba(136,19,55,0.18)]",
+      "border-rose-900 bg-[linear-gradient(135deg,#b85c4a,#8f352d)] text-white shadow-[0_14px_30px_rgba(184,92,74,0.22)] hover:shadow-[0_18px_38px_rgba(184,92,74,0.30)]",
     moss:
-      "bg-moss-700 text-white hover:bg-moss-800 border-moss-800 shadow-[0_10px_24px_rgba(70,81,47,0.20)]",
+      "border-moss-800 bg-[linear-gradient(135deg,#5f8a5f,#354a30)] text-white shadow-[0_14px_30px_rgba(79,111,69,0.20)] hover:shadow-[0_18px_38px_rgba(79,111,69,0.28)]",
   };
   const sizes = {
     sm: "min-h-10 px-3.5 py-2 text-sm",
     md: "min-h-12 px-4 py-2.5 text-sm",
-    lg: "min-h-[52px] px-5 py-3 text-base",
+    lg: "min-h-[54px] px-5 py-3 text-base",
     icon: "h-11 w-11 p-0",
   };
 
   return (
     <button
       className={cn(
-        "focus-ring inline-flex items-center justify-center gap-2 rounded-lg border font-bold transition duration-200 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50",
+        "focus-ring tap-transition inline-flex items-center justify-center gap-2 rounded-xl border font-black active:translate-y-px active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50",
         variants[variant],
         sizes[size],
         className,
@@ -495,7 +516,7 @@ function Button({ children, icon: Icon, variant = "primary", size = "md", classN
 function Field({ label, children, hint }) {
   return (
     <label className="grid gap-2 text-sm font-semibold text-bark-800">
-      <span className="text-[13px] uppercase tracking-[0.13em] text-bark-600">{label}</span>
+      <span className="text-[13px] font-black tracking-[0.02em] text-bark-700">{label}</span>
       {children}
       {hint ? <span className="text-xs font-medium text-bark-500">{hint}</span> : null}
     </label>
@@ -505,7 +526,7 @@ function Field({ label, children, hint }) {
 function TextInput(props) {
   return (
     <input
-      className="focus-ring min-h-12 rounded-lg border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] placeholder:text-bark-300"
+      className="focus-ring min-h-12 rounded-xl border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] tap-transition placeholder:text-bark-300 hover:border-clay-500/50 disabled:cursor-not-allowed disabled:bg-bark-50/70 disabled:text-bark-400"
       {...props}
     />
   );
@@ -514,7 +535,7 @@ function TextInput(props) {
 function SelectInput({ children, ...props }) {
   return (
     <select
-      className="focus-ring min-h-12 rounded-lg border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]"
+      className="focus-ring min-h-12 rounded-xl border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] tap-transition hover:border-clay-500/50 disabled:cursor-not-allowed disabled:bg-bark-50/70 disabled:text-bark-400"
       {...props}
     >
       {children}
@@ -525,7 +546,7 @@ function SelectInput({ children, ...props }) {
 function TextareaInput(props) {
   return (
     <textarea
-      className="focus-ring min-h-28 rounded-lg border border-bark-200/80 bg-cream-50/95 px-3.5 py-2.5 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] placeholder:text-bark-300"
+      className="focus-ring min-h-28 rounded-xl border border-bark-200/80 bg-cream-50/95 px-3.5 py-2.5 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] tap-transition placeholder:text-bark-300 hover:border-clay-500/50 disabled:cursor-not-allowed disabled:bg-bark-50/70 disabled:text-bark-400"
       {...props}
     />
   );
@@ -533,7 +554,7 @@ function TextareaInput(props) {
 
 function PageHeader({ title, eyebrow, action, backAction }) {
   return (
-    <div className="mb-6 flex items-start justify-between gap-3">
+    <div className="mb-7 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="flex min-w-0 items-start gap-3">
         {backAction ? (
           <Button
@@ -546,16 +567,17 @@ function PageHeader({ title, eyebrow, action, backAction }) {
         ) : null}
         <div className="min-w-0">
           {eyebrow ? (
-            <p className="mb-2 inline-flex rounded-full border border-clay-200 bg-clay-100/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.22em] text-clay-700">
+            <p className="mb-3 inline-flex rounded-full border border-clay-200 bg-clay-100/80 px-3 py-1 text-[11px] font-black uppercase tracking-[0.18em] text-clay-700 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               {eyebrow}
             </p>
           ) : null}
-          <h1 className="max-w-4xl text-3xl font-black leading-[0.98] text-bark-900 sm:text-4xl">
+          <h1 className="max-w-4xl text-3xl font-black leading-[1.02] tracking-[-0.025em] text-bark-900 text-balance sm:text-4xl">
             {title}
           </h1>
+          <div className="flower-garland mt-3 hidden sm:block" aria-hidden="true" />
         </div>
       </div>
-      {action}
+      {action ? <div className="shrink-0">{action}</div> : null}
     </div>
   );
 }
@@ -564,7 +586,7 @@ function Panel({ children, className }) {
   return (
     <section
       className={cn(
-        "rounded-lg border border-bark-200/70 bg-cream-100/88 p-4 shadow-soft backdrop-blur-sm transition duration-300",
+        "floral-card rounded-[1.65rem] border border-bark-200/70 bg-cream-50/90 p-4 shadow-soft shadow-bark-800/5 backdrop-blur-sm tap-transition hover:border-bark-300/80 sm:p-5",
         className,
       )}
     >
@@ -575,14 +597,15 @@ function Panel({ children, className }) {
 
 function EmptyState({ icon: Icon, title, text, action }) {
   return (
-    <Panel className="grid place-items-center py-10 text-center">
-      <div className="grid max-w-sm place-items-center gap-3">
-        <span className="grid h-12 w-12 place-items-center rounded-full bg-bark-100 text-bark-700">
+    <Panel className="relative isolate grid place-items-center overflow-hidden py-12 text-center">
+      <div className="absolute inset-4 -z-10 rounded-[2rem] border border-dashed border-bark-200/70" />
+      <div className="grid max-w-sm place-items-center gap-4">
+        <span className="flower-stamp grid h-14 w-14 place-items-center rounded-2xl border border-bark-200 text-bark-700 shadow-soft">
           <Icon className="h-6 w-6" />
         </span>
         <div>
-          <h3 className="font-bold text-bark-900">{title}</h3>
-          {text ? <p className="mt-1 text-sm text-bark-500">{text}</p> : null}
+          <h3 className="text-lg font-black tracking-[-0.01em] text-bark-900">{title}</h3>
+          {text ? <p className="mt-1 text-sm leading-6 text-bark-500">{text}</p> : null}
         </div>
         {action}
       </div>
@@ -594,7 +617,7 @@ function ShopLogo({ className }) {
   return (
     <img
       alt="Banduthu 2HAND"
-      className={cn("h-full w-full rounded-lg object-cover", className)}
+      className={cn("h-full w-full rounded-xl object-cover", className)}
       src="/shop-logo.svg"
     />
   );
@@ -604,13 +627,13 @@ function ConfirmDeleteOrderModal({ order, onCancel, onConfirm }) {
   if (!order) return null;
 
   const payment = getOrderPayment(order);
-  const isPaid = payment.paymentStatus === "paid";
+  const hasReceivedPayment = getOrderRevenueAmount(order) > 0 || payment.prepaidAmount > 0;
 
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-bark-900/55 px-4 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-lg border border-bark-200 bg-cream-100 p-5 shadow-retro">
+      <div className="w-full max-w-md rounded-2xl border border-bark-200 bg-cream-50 p-5 shadow-retro">
         <div className="mb-4 flex items-start gap-3">
-          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-rose-800 text-white">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-rose-800 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
             <Trash2 className="h-5 w-5" />
           </span>
           <div>
@@ -620,12 +643,12 @@ function ConfirmDeleteOrderModal({ order, onCancel, onConfirm }) {
             </p>
           </div>
         </div>
-        {isPaid ? (
-          <p className="mb-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm font-semibold leading-6 text-rose-800">
+        {hasReceivedPayment ? (
+          <p className="mb-4 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm font-semibold leading-6 text-rose-800">
             Đơn này đã có thanh toán. Hãy chắc chắn bạn đã xử lý hoàn tiền hoặc ghi chú trước khi xóa.
           </p>
         ) : null}
-        <div className="mb-5 rounded-lg border border-bark-200 bg-cream-50/80 p-3 text-sm">
+        <div className="mb-5 rounded-xl border border-bark-200 bg-white/70 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
           <p className="font-bold text-bark-900">{order.orderCode}</p>
           <p className="mt-1 text-bark-600">
             {instagramHandle(order.customerInstagramUsername)} · {formatCurrency(order.totalAmount)}
@@ -644,6 +667,69 @@ function ConfirmDeleteOrderModal({ order, onCancel, onConfirm }) {
   );
 }
 
+function ConfirmCancelOrderModal({ order, onCancel, onConfirm }) {
+  if (!order) return null;
+
+  const receivedAmount = Math.max(0, getOrderRevenueAmount(order));
+  const hasReceivedPayment = receivedAmount > 0;
+
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-bark-900/55 px-4 backdrop-blur-sm">
+      <div
+        aria-modal="true"
+        className="w-full max-w-md rounded-2xl border border-bark-200 bg-cream-50 p-5 shadow-retro"
+        role="dialog"
+      >
+        <div className="mb-4 flex items-start gap-3">
+          <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-clay-700 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.22)]">
+            <XCircle className="h-5 w-5" />
+          </span>
+          <div>
+            <h2 className="text-xl font-black text-bark-900">Hủy đơn hàng?</h2>
+            <p className="mt-2 text-sm leading-6 text-bark-600">
+              Sản phẩm trong đơn sẽ quay về trạng thái còn hàng. Nếu đã hoàn tiền cho khách, doanh thu sẽ bị trừ phần tiền đã nhận.
+            </p>
+          </div>
+        </div>
+        <div className="mb-4 rounded-xl border border-bark-200 bg-white/70 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+          <p className="font-bold text-bark-900">{order.orderCode}</p>
+          <p className="mt-1 text-bark-600">
+            {instagramHandle(order.customerInstagramUsername)} · Đã nhận {formatCurrency(receivedAmount)}
+          </p>
+        </div>
+        {hasReceivedPayment ? (
+          <p className="mb-5 rounded-xl border border-clay-200 bg-clay-100/70 p-3 text-sm font-semibold leading-6 text-clay-800">
+            Bạn đã hoàn trả số tiền này cho khách chưa?
+          </p>
+        ) : (
+          <p className="mb-5 rounded-xl border border-bark-200 bg-bark-50 p-3 text-sm font-semibold leading-6 text-bark-700">
+            Đơn này chưa ghi nhận thanh toán, nên hủy đơn sẽ không đổi doanh thu.
+          </p>
+        )}
+        <div className="grid gap-2 sm:grid-cols-2">
+          <Button className="sm:col-span-2" onClick={onCancel} type="button" variant="secondary">
+            Giữ đơn
+          </Button>
+          {hasReceivedPayment ? (
+            <>
+              <Button icon={WalletCards} onClick={() => onConfirm(false)} type="button" variant="moss">
+                Không hoàn tiền
+              </Button>
+              <Button icon={XCircle} onClick={() => onConfirm(true)} type="button" variant="danger">
+                Có hoàn tiền
+              </Button>
+            </>
+          ) : (
+            <Button className="sm:col-span-2" icon={XCircle} onClick={() => onConfirm(false)} type="button" variant="danger">
+              Hủy đơn
+            </Button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PasswordInput({ value, onChange, placeholder, autoComplete }) {
   const [visible, setVisible] = useState(false);
 
@@ -651,7 +737,7 @@ function PasswordInput({ value, onChange, placeholder, autoComplete }) {
     <div className="relative">
       <input
         autoComplete={autoComplete}
-        className="focus-ring min-h-12 w-full rounded-lg border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 pr-12 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)] placeholder:text-bark-300"
+        className="focus-ring min-h-12 w-full rounded-xl border border-bark-200/80 bg-cream-50/95 px-3.5 py-2 pr-12 text-bark-900 shadow-[inset_0_1px_0_rgba(255,255,255,0.86)] tap-transition placeholder:text-bark-300 hover:border-clay-500/50"
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         type={visible ? "text" : "password"}
@@ -659,7 +745,7 @@ function PasswordInput({ value, onChange, placeholder, autoComplete }) {
       />
       <button
         aria-label={visible ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
-        className="focus-ring absolute right-1.5 top-1.5 grid h-9 w-9 place-items-center rounded-lg text-bark-500 transition hover:bg-bark-100 hover:text-bark-800"
+        className="focus-ring tap-transition absolute right-1.5 top-1.5 grid h-9 w-9 place-items-center rounded-lg text-bark-500 hover:bg-bark-100 hover:text-bark-800"
         onClick={() => setVisible((current) => !current)}
         type="button"
       >
@@ -700,32 +786,33 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
   };
 
   return (
-    <main className="lock-stage min-h-screen overflow-hidden px-4 py-8 text-bark-900">
+    <main className="lock-stage min-h-[100dvh] overflow-hidden px-4 py-8 text-bark-900">
       <div className="mx-auto grid min-h-[calc(100vh-4rem)] max-w-6xl place-items-center">
         <div className="grid w-full gap-5 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
           <section className="hidden lg:grid">
-            <div className="relative rounded-lg border border-bark-200/70 bg-bark-900 p-8 text-cream-50 shadow-retro">
-              <div className="absolute inset-0 rounded-lg opacity-40 [background-image:linear-gradient(90deg,rgba(255,255,255,.06)_1px,transparent_1px),linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:28px_28px]" />
+            <div className="relative overflow-hidden rounded-[2rem] border border-bark-200/70 bg-[linear-gradient(135deg,#3a2415,#24160e)] p-8 text-cream-50 shadow-retro">
+              <div className="absolute inset-0 rounded-[2rem] opacity-40 [background-image:linear-gradient(90deg,rgba(255,255,255,.06)_1px,transparent_1px),linear-gradient(rgba(255,255,255,.05)_1px,transparent_1px)] [background-size:28px_28px]" />
+              <div className="absolute -right-16 -top-16 h-52 w-52 rounded-full bg-clay-500/25 blur-3xl" />
               <div className="relative">
                 <p className="mb-16 inline-flex rounded-full border border-cream-50/20 px-3 py-1 text-xs font-black uppercase tracking-[0.16em] text-cream-200">
                   Bảng bán hàng
                 </p>
-                <h1 className="max-w-lg text-5xl font-black leading-none">
+                <h1 className="max-w-lg text-5xl font-black leading-[1.02] tracking-[-0.035em]">
                   Mở khóa dashboard của shop.
                 </h1>
                 <div className="mt-8 grid grid-cols-3 gap-2 text-xs font-bold uppercase tracking-[0.18em] text-cream-200">
-                  <span className="rounded-lg border border-cream-50/15 p-3">Sản phẩm</span>
-                  <span className="rounded-lg border border-cream-50/15 p-3">Đơn hàng</span>
-                  <span className="rounded-lg border border-cream-50/15 p-3">VietQR</span>
+                  <span className="rounded-xl border border-cream-50/15 bg-white/5 p-3">Sản phẩm</span>
+                  <span className="rounded-xl border border-cream-50/15 bg-white/5 p-3">Đơn hàng</span>
+                  <span className="rounded-xl border border-cream-50/15 bg-white/5 p-3">VietQR</span>
                 </div>
               </div>
             </div>
           </section>
 
-          <section className="mx-auto w-full max-w-md rounded-lg border border-bark-200/70 bg-cream-100/92 p-5 shadow-retro backdrop-blur sm:p-7">
+          <section className="mx-auto w-full max-w-md rounded-[1.75rem] border border-bark-200/70 bg-cream-50/90 p-5 shadow-retro backdrop-blur sm:p-7">
             <div className="mb-7 flex items-center justify-between gap-3">
               <div className="flex min-w-0 items-center gap-3">
-                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
+                <span className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
                   <ShopLogo />
                 </span>
                 <div className="min-w-0">
@@ -735,13 +822,13 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
                   <p className="text-xs font-bold text-bark-500">Dashboard bán hàng</p>
                 </div>
               </div>
-              <span className="rounded-full border border-moss-100 bg-moss-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.1em] text-moss-700">
-                MVP
+              <span className="rounded-full border border-clay-200 bg-clay-100 px-2.5 py-1 text-xs font-black uppercase tracking-[0.1em] text-clay-700">
+                riêng tư
               </span>
             </div>
 
             <div className="mb-6">
-              <h2 className="text-3xl font-black leading-none text-bark-900">
+              <h2 className="text-3xl font-black leading-[1.02] tracking-[-0.025em] text-bark-900">
                 {isSetup ? "Set seller password" : "Seller Access"}
               </h2>
               <p className="mt-3 text-sm leading-6 text-bark-600">
@@ -771,7 +858,7 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
                 </Field>
               ) : null}
               {error ? (
-                <p className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
+                <p className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-800">
                   {error}
                 </p>
               ) : null}
@@ -780,8 +867,8 @@ function LockScreen({ hasPassword, onSetupPassword, onUnlock, settings }) {
               </Button>
             </form>
 
-            <p className="mt-5 rounded-lg border border-bark-200/70 bg-cream-50/80 p-3 text-xs font-semibold leading-5 text-bark-500">
-              Personal MVP lock only. Do not store sensitive banking login data.
+            <p className="mt-5 rounded-xl border border-bark-200/70 bg-white/70 p-3 text-xs font-semibold leading-5 text-bark-500">
+              Khóa truy cập cá nhân cho dashboard shop. Không lưu thông tin đăng nhập ngân hàng tại đây.
             </p>
           </section>
         </div>
@@ -804,7 +891,7 @@ function ProductImage({ product, className }) {
   return (
     <div
       className={cn(
-        "grid h-full w-full place-items-center bg-[linear-gradient(135deg,#f1e6d8,#dfc8ad_48%,#e5ead8)] text-bark-600",
+        "flower-stamp grid h-full w-full place-items-center text-bark-600",
         className,
       )}
     >
@@ -815,26 +902,26 @@ function ProductImage({ product, className }) {
 
 function StatCard({ title, value, icon: Icon, tone = "brown" }) {
   const tones = {
-    brown: "bg-bark-900 text-cream-50 border-bark-900",
-    ivory: "bg-cream-100 text-bark-900 border-bark-200",
-    moss: "bg-moss-700 text-white border-moss-800",
-    clay: "bg-clay-500 text-white border-clay-700",
+    brown: "border-bark-800 bg-[linear-gradient(135deg,#3a2415,#24160e)] text-cream-50",
+    ivory: "border-bark-200 bg-cream-50/90 text-bark-900",
+    moss: "border-moss-800 bg-[linear-gradient(135deg,#5f8a5f,#354a30)] text-white",
+    clay: "border-clay-700 bg-[linear-gradient(135deg,#c88a45,#8d5830)] text-white",
   };
 
   return (
     <div
       className={cn(
-        "group rounded-lg border p-4 shadow-soft transition duration-300 hover:-translate-y-0.5 hover:shadow-retro",
+        "floral-card group overflow-hidden rounded-[1.65rem] border p-4 shadow-soft tap-transition hover:-translate-y-0.5 hover:shadow-glow",
         tones[tone],
       )}
     >
       <div className="mb-4 flex items-center justify-between gap-3">
-        <p className="text-xs font-black uppercase tracking-[0.16em] opacity-75">{title}</p>
-        <span className="grid h-9 w-9 place-items-center rounded-lg bg-white/12">
+        <p className="text-xs font-black uppercase tracking-[0.14em] opacity-75">{title}</p>
+        <span className="grid h-10 w-10 place-items-center rounded-xl bg-white/10 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)]">
           <Icon className="h-4 w-4 opacity-90" />
         </span>
       </div>
-      <p className="break-words text-2xl font-bold">{value}</p>
+      <p className="money-figures break-words text-2xl font-black tracking-[-0.03em]">{value}</p>
     </div>
   );
 }
@@ -920,13 +1007,13 @@ function DashboardPage({ products, orders, customers, go }) {
             <div className="grid gap-3">
               {recentOrders.map((order) => (
                 <button
-                  className="focus-ring flex items-center justify-between gap-3 rounded-lg border border-bark-200/70 bg-cream-50/80 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition duration-300 hover:-translate-y-0.5 hover:bg-bark-100/80"
+                  className="focus-ring tap-transition flex items-center justify-between gap-3 rounded-xl border border-bark-200/70 bg-white/70 p-3 text-left shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] hover:-translate-y-0.5 hover:border-clay-500/50 hover:bg-cream-50"
                   key={order.id}
                   onClick={() => go("order-detail", { id: order.id })}
                 >
                   <div className="min-w-0">
-                    <p className="font-bold text-bark-900">{order.orderCode}</p>
-                    <p className="truncate text-sm text-bark-500">
+                    <p className="font-black text-bark-900">{order.orderCode}</p>
+                    <p className="money-figures truncate text-sm text-bark-500">
                       {instagramHandle(order.customerInstagramUsername)} · {formatCurrency(order.totalAmount)}
                     </p>
                   </div>
@@ -947,11 +1034,13 @@ function DashboardPage({ products, orders, customers, go }) {
           )}
         </Panel>
 
-        <Panel className="bg-bark-800 text-white">
+        <Panel className="relative isolate overflow-hidden border-bark-800 bg-[linear-gradient(135deg,#3a2415,#24160e)] text-white">
+          <div className="absolute -right-20 -top-20 -z-10 h-52 w-52 rounded-full bg-clay-500/25 blur-3xl" />
+          <div className="flower-garland mb-2 opacity-70" aria-hidden="true" />
           <div className="grid h-full content-between gap-5">
             <div>
               <p className="text-sm font-semibold text-bark-100">Công việc hôm nay</p>
-              <h2 className="mt-2 text-xl font-bold leading-tight sm:text-2xl">
+              <h2 className="mt-2 text-xl font-black leading-tight tracking-[-0.02em] sm:text-2xl">
                 Quản lý đơn, khách và QR thanh toán.
               </h2>
               <p className="mt-3 text-sm leading-6 text-bark-100">
@@ -1024,24 +1113,24 @@ function ProductsPage({ products, go, updateProductStatus }) {
       {filtered.length ? (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((product) => (
-            <Panel className="group overflow-hidden p-0 hover:-translate-y-1 hover:border-bark-300" key={product.id}>
+            <Panel className="group overflow-hidden p-0 hover:-translate-y-1 hover:border-bark-300 hover:shadow-glow" key={product.id}>
               <div className="aspect-[4/3] overflow-hidden bg-bark-100">
                 <ProductImage product={product} />
               </div>
-              <div className="grid gap-4 p-4">
+              <div className="grid gap-4 p-4 sm:p-5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-lg font-bold text-bark-900">{product.name}</p>
+                    <p className="truncate text-lg font-black tracking-[-0.015em] text-bark-900">{product.name}</p>
                     <p className="text-sm text-bark-500">
                       {product.brand || "Không brand"} · {product.size || "Không size"}
                     </p>
                   </div>
                   {statusBadge(PRODUCT_STATUS[product.status], product.status)}
                 </div>
-                <div className="grid grid-cols-2 gap-2 rounded-lg border border-bark-100 bg-cream-50/80 p-3 text-sm">
+                <div className="grid grid-cols-2 gap-2 rounded-xl border border-bark-100 bg-white/70 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   <div>
                     <p className="text-bark-500">Giá bán</p>
-                    <p className="font-bold text-bark-900">{formatCurrency(product.sellingPrice)}</p>
+                    <p className="money-figures font-black text-bark-900">{formatCurrency(product.sellingPrice)}</p>
                   </div>
                   <div>
                     <p className="text-bark-500">Tình trạng</p>
@@ -1253,7 +1342,7 @@ function ProductFormPage({ product, onSave, go }) {
                 value={form.imageUrl}
               />
             </Field>
-            <div className="aspect-[4/3] overflow-hidden rounded-lg border border-bark-100">
+            <div className="aspect-[4/3] overflow-hidden rounded-2xl border border-bark-100 shadow-soft">
               <ProductImage product={form} />
             </div>
           </Panel>
@@ -1443,9 +1532,9 @@ function CustomerFormPage({ customer, onSave, go }) {
           </Field>
         </Panel>
         <Panel className="grid content-start gap-4">
-          <div className="rounded-lg bg-bark-50 p-4">
+          <div className="rounded-2xl border border-bark-100 bg-bark-50 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
             <Instagram className="mb-3 h-8 w-8 text-clay-700" />
-            <p className="text-lg font-bold text-bark-900">
+            <p className="text-lg font-black tracking-[-0.015em] text-bark-900">
               {instagramHandle(form.instagramUsername) || "@instagram"}
             </p>
             <p className="mt-1 text-sm text-bark-500">{form.name || "Tên khách"}</p>
@@ -1511,16 +1600,16 @@ function OrdersPage({ orders, go, onRequestDelete }) {
         <div className="grid gap-4 lg:grid-cols-2">
           {filtered.map((order) => (
             <div
-              className="focus-ring rounded-lg border border-bark-200/70 bg-cream-100/88 p-4 text-left shadow-soft transition duration-300 hover:-translate-y-1 hover:border-bark-300 hover:shadow-retro"
+              className="focus-ring rounded-2xl border border-bark-200/70 bg-cream-50/90 p-4 text-left shadow-soft tap-transition hover:-translate-y-1 hover:border-bark-300 hover:shadow-glow sm:p-5"
               key={order.id}
             >
-              <div className="flex items-start justify-between gap-3">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <button
-                  className="focus-ring min-w-0 flex-1 rounded-lg text-left"
+                  className="focus-ring min-w-0 flex-1 rounded-xl text-left"
                   onClick={() => go("order-detail", { id: order.id })}
                   type="button"
                 >
-                  <p className="text-lg font-bold text-bark-900">{order.orderCode}</p>
+                  <p className="text-lg font-black tracking-[-0.015em] text-bark-900">{order.orderCode}</p>
                   <p className="truncate text-sm text-bark-500">
                     {instagramHandle(order.customerInstagramUsername)} · {formatDate(order.createdAt)}
                   </p>
@@ -1536,11 +1625,11 @@ function OrdersPage({ orders, go, onRequestDelete }) {
                 </Button>
               </div>
               <div className="mt-4 grid gap-3 sm:grid-cols-3">
-                <div>
+                <div className="rounded-xl border border-bark-100 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   <p className="text-xs font-semibold uppercase tracking-wide text-bark-400">Tổng tiền</p>
-                  <p className="font-bold text-bark-900">{formatCurrency(order.totalAmount)}</p>
+                  <p className="money-figures mt-1 font-black text-bark-900">{formatCurrency(order.totalAmount)}</p>
                 </div>
-                <div>
+                <div className="rounded-xl border border-bark-100 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   <p className="text-xs font-semibold uppercase tracking-wide text-bark-400">Thanh toán</p>
                   <div className="mt-1">
                     {statusBadge(
@@ -1549,14 +1638,14 @@ function OrdersPage({ orders, go, onRequestDelete }) {
                     )}
                   </div>
                 </div>
-                <div>
+                <div className="rounded-xl border border-bark-100 bg-white/70 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                   <p className="text-xs font-semibold uppercase tracking-wide text-bark-400">Còn lại</p>
-                  <p className="font-bold text-bark-900">
+                  <p className="money-figures mt-1 font-black text-bark-900">
                     {formatCurrency(getOrderPayment(order).remainingAmount)}
                   </p>
                 </div>
               </div>
-              <div className="mt-4 flex items-center justify-between gap-2">
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-2">
                 {statusBadge(ORDER_STATUS[order.status], order.status)}
                 <Button
                   icon={ChevronRight}
@@ -1674,14 +1763,14 @@ function CreateOrderPage({ products, customers, orders, settings, onCreate, go, 
                 {availableProducts.map((product) => (
                   <label
                     className={cn(
-                      "focus-within:ring-2 focus-within:ring-bark-500 grid cursor-pointer grid-cols-[76px_1fr_auto] gap-3 rounded-lg border p-2 transition",
+                      "tap-transition grid cursor-pointer grid-cols-[72px_1fr_auto] gap-3 rounded-xl border p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] focus-within:ring-2 focus-within:ring-clay-500 sm:grid-cols-[76px_1fr_auto]",
                       productIds.includes(product.id)
                         ? "border-bark-700 bg-bark-50"
-                        : "border-bark-200/70 bg-cream-50/90 hover:border-bark-400",
+                        : "border-bark-200/70 bg-white/70 hover:border-clay-500/50 hover:bg-cream-50",
                     )}
                     key={product.id}
                   >
-                    <div className="h-20 overflow-hidden rounded-md">
+                    <div className="h-20 overflow-hidden rounded-lg">
                       <ProductImage product={product} />
                     </div>
                     <div className="min-w-0 self-center">
@@ -1746,36 +1835,36 @@ function CreateOrderPage({ products, customers, orders, settings, onCreate, go, 
                   value={prepaidAmount}
                 />
               </Field>
-              <div className="rounded-lg bg-bark-800 p-4 text-white">
+              <div className="rounded-2xl bg-[linear-gradient(135deg,#6b4423,#3a2415)] p-4 text-white shadow-[0_18px_35px_rgba(58,36,21,0.18),inset_0_1px_0_rgba(255,255,255,0.14)]">
                 <p className="text-sm font-semibold text-bark-100">Tổng thanh toán</p>
-                <p className="mt-1 text-2xl font-bold">{formatCurrency(totalAmount)}</p>
+                <p className="money-figures mt-1 text-2xl font-black tracking-[-0.03em]">{formatCurrency(totalAmount)}</p>
               </div>
-              <div className="grid gap-2 rounded-lg border border-bark-200 bg-cream-50/80 p-3 text-sm">
+              <div className="grid gap-2 rounded-xl border border-bark-200 bg-white/70 p-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
                 <div className="flex justify-between">
                   <span className="text-bark-500">Đã thanh toán trước</span>
-                  <strong>{formatCurrency(payment.prepaidAmount)}</strong>
+                  <strong className="money-figures">{formatCurrency(payment.prepaidAmount)}</strong>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-bark-500">Còn lại</span>
-                  <strong>{formatCurrency(payment.remainingAmount)}</strong>
+                  <strong className="money-figures">{formatCurrency(payment.remainingAmount)}</strong>
                 </div>
               </div>
             </div>
           </Panel>
           <Panel className="grid gap-3">
             <p className="text-sm font-semibold text-bark-500">Mã đơn kế tiếp</p>
-            <p className="text-xl font-bold text-bark-900">{nextOrderCode}</p>
-            <p className="rounded-lg bg-bark-50 p-3 text-sm font-semibold text-bark-700">
+            <p className="text-xl font-black tracking-[-0.02em] text-bark-900">{nextOrderCode}</p>
+            <p className="rounded-xl border border-bark-100 bg-bark-50 p-3 text-sm font-semibold text-bark-700">
               {transferContent || "Chọn khách để tạo nội dung chuyển khoản"}
             </p>
             {totalAmount > 0 && payment.remainingAmount <= 0 ? (
-              <p className="rounded-lg border border-moss-100 bg-moss-100 p-3 text-sm font-semibold text-moss-700">
+              <p className="rounded-xl border border-moss-100 bg-moss-100 p-3 text-sm font-semibold text-moss-700">
                 Đơn này đã thanh toán đủ.
               </p>
             ) : qrUrl ? (
               <img
                 alt="VietQR số tiền còn lại"
-                className="mx-auto w-full max-w-64 rounded-lg border border-bark-100 bg-cream-50"
+                className="mx-auto w-full max-w-64 rounded-2xl border border-bark-100 bg-cream-50 shadow-soft"
                 src={qrUrl}
               />
             ) : null}
@@ -1829,6 +1918,7 @@ function OrderDetailPage({
   }
 
   const orderPayment = getOrderPayment(order);
+  const isCancelled = order.status === "cancelled";
   const hydratedOrder = paymentAwareOrder(order);
   const qrUrl =
     orderPayment.remainingAmount > 0
@@ -1841,7 +1931,8 @@ function OrderDetailPage({
           remainingAmount: orderPayment.remainingAmount,
         })
       : "Đơn này đã thanh toán đủ.";
-  const editablePayment = calculatePayment(order.totalAmount, editablePrepaid);
+  const orderTotal = getOrderTotalAmount(order);
+  const editablePayment = calculatePayment(orderTotal, editablePrepaid);
 
   const nextActions = [
     order.status === "waiting_payment"
@@ -1885,7 +1976,7 @@ function OrderDetailPage({
               </div>
             </div>
             {customer ? (
-              <div className="grid gap-2 rounded-lg bg-bark-50 p-3 text-sm text-bark-700">
+              <div className="grid gap-2 rounded-xl border border-bark-100 bg-bark-50 p-3 text-sm text-bark-700">
                 <p>{customer.name || "Chưa có tên"}</p>
                 <p>{customer.phone || "Chưa có số điện thoại"}</p>
                 <p>{customer.address || "Chưa có địa chỉ"}</p>
@@ -1898,10 +1989,10 @@ function OrderDetailPage({
             <div className="grid gap-3">
               {order.items.map((item) => (
                 <div
-                  className="grid grid-cols-[72px_1fr_auto] gap-3 rounded-lg border border-bark-100 bg-bark-50 p-2"
+                  className="grid grid-cols-[72px_1fr] gap-3 rounded-xl border border-bark-100 bg-white/70 p-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] sm:grid-cols-[72px_1fr_auto]"
                   key={item.id}
                 >
-                  <div className="h-20 overflow-hidden rounded-md">
+                  <div className="h-20 overflow-hidden rounded-lg">
                     <ProductImage product={item} />
                   </div>
                   <div className="min-w-0 self-center">
@@ -1910,7 +2001,7 @@ function OrderDetailPage({
                       {item.sku || "Không SKU"} · {item.size || "Không size"}
                     </p>
                   </div>
-                  <p className="self-center text-right font-bold text-bark-900">
+                  <p className="money-figures col-span-2 self-center text-left font-black text-bark-900 sm:col-span-1 sm:text-right">
                     {formatCurrency(item.sellingPrice)}
                   </p>
                 </div>
@@ -1933,17 +2024,17 @@ function OrderDetailPage({
                 <span className="text-bark-500">Giảm giá</span>
                 <strong>-{formatCurrency(order.discount)}</strong>
               </div>
-              <div className="mt-2 flex justify-between rounded-lg bg-bark-800 p-3 text-white">
+              <div className="money-figures mt-2 flex justify-between rounded-2xl bg-[linear-gradient(135deg,#6b4423,#3a2415)] p-3 text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.14)]">
                 <span>Tổng thanh toán</span>
                 <strong>{formatCurrency(order.totalAmount)}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-bark-500">Đã thanh toán trước</span>
-                <strong>{formatCurrency(orderPayment.prepaidAmount)}</strong>
+                <strong className="money-figures">{formatCurrency(orderPayment.prepaidAmount)}</strong>
               </div>
               <div className="flex justify-between">
                 <span className="text-bark-500">Còn lại</span>
-                <strong>{formatCurrency(orderPayment.remainingAmount)}</strong>
+                <strong className="money-figures">{formatCurrency(orderPayment.remainingAmount)}</strong>
               </div>
             </div>
           </Panel>
@@ -1953,26 +2044,26 @@ function OrderDetailPage({
           <Panel className="grid gap-4">
             <div>
               <p className="text-sm font-semibold text-bark-500">Thanh toán VietQR</p>
-              <h2 className="text-xl font-bold text-bark-900">
+              <h2 className="money-figures text-2xl font-black tracking-[-0.03em] text-bark-900">
                 {formatCurrency(orderPayment.remainingAmount)}
               </h2>
             </div>
-            <div className="rounded-lg bg-bark-50 p-3">
+            <div className="rounded-xl border border-bark-100 bg-bark-50 p-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-bark-400">Nội dung CK</p>
               <p className="mt-1 font-bold text-bark-900">{order.transferContent}</p>
             </div>
             {orderPayment.remainingAmount <= 0 ? (
-              <div className="rounded-lg border border-moss-100 bg-moss-100 p-4 text-center text-sm font-semibold text-moss-700">
+              <div className="rounded-xl border border-moss-100 bg-moss-100 p-4 text-center text-sm font-semibold text-moss-700">
                 Đơn này đã thanh toán đủ.
               </div>
             ) : qrUrl ? (
               <img
                 alt={`QR thanh toán ${order.orderCode}`}
-                className="mx-auto w-full max-w-72 rounded-lg border border-bark-100 bg-white"
+                className="mx-auto w-full max-w-72 rounded-2xl border border-bark-100 bg-white shadow-soft"
                 src={qrUrl}
               />
             ) : (
-              <div className="rounded-lg border border-dashed border-bark-200 p-5 text-center text-sm text-bark-500">
+              <div className="rounded-xl border border-dashed border-bark-200 p-5 text-center text-sm text-bark-500">
                 Chưa tạo được QR vì thiếu số tiền hoặc nội dung chuyển khoản.
               </div>
             )}
@@ -2010,7 +2101,7 @@ function OrderDetailPage({
               </Button>
             </div>
             <Button
-              disabled={orderPayment.paymentStatus === "paid" || order.status === "cancelled"}
+              disabled={orderPayment.paymentStatus === "paid" || isCancelled}
               icon={WalletCards}
               onClick={() => onMarkPaid(order.id)}
               type="button"
@@ -2025,12 +2116,13 @@ function OrderDetailPage({
             <div className="grid gap-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-bark-500">Tổng tiền</span>
-                <strong>{formatCurrency(order.totalAmount)}</strong>
+                <strong className="money-figures">{formatCurrency(order.totalAmount)}</strong>
               </div>
               <Field label="Số tiền thanh toán trước">
                 <TextInput
+                  disabled={isCancelled}
                   inputMode="numeric"
-                  max={order.totalAmount}
+                  max={orderTotal}
                   min="0"
                   onChange={(event) => setEditablePrepaid(event.target.value)}
                   type="number"
@@ -2039,11 +2131,12 @@ function OrderDetailPage({
               </Field>
               <div className="flex justify-between">
                 <span className="text-bark-500">Còn lại sau khi lưu</span>
-                <strong>{formatCurrency(editablePayment.remainingAmount)}</strong>
+                <strong className="money-figures">{formatCurrency(editablePayment.remainingAmount)}</strong>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <Button
+                disabled={isCancelled}
                 icon={Save}
                 onClick={() => onSavePayment(order.id, editablePrepaid)}
                 type="button"
@@ -2051,8 +2144,9 @@ function OrderDetailPage({
                 Lưu thanh toán
               </Button>
               <Button
+                disabled={isCancelled}
                 icon={WalletCards}
-                onClick={() => onSavePayment(order.id, order.totalAmount)}
+                onClick={() => onSavePayment(order.id, orderTotal)}
                 type="button"
                 variant="moss"
               >
@@ -2149,7 +2243,7 @@ function QrGeneratorPage({ settings, onCopy, onDownload }) {
               <TextInput readOnly value={settings.qrTemplate} />
             </Field>
           </div>
-          <div className="rounded-lg bg-bark-50 p-4">
+          <div className="rounded-xl border border-bark-100 bg-bark-50 p-4">
             <p className="text-xs font-semibold uppercase tracking-wide text-bark-400">Nội dung sau lọc</p>
             <p className="mt-1 font-bold text-bark-900">{transferContent || "Chưa có nội dung"}</p>
           </div>
@@ -2158,16 +2252,16 @@ function QrGeneratorPage({ settings, onCopy, onDownload }) {
         <Panel className="grid content-start gap-4">
           <div>
             <p className="text-sm font-semibold text-bark-500">Xem trước QR</p>
-            <h2 className="text-xl font-bold text-bark-900">{formatCurrency(totalAmount)}</h2>
+            <h2 className="money-figures text-2xl font-black tracking-[-0.03em] text-bark-900">{formatCurrency(totalAmount)}</h2>
           </div>
           {qrUrl ? (
             <img
               alt="QR thanh toán"
-              className="mx-auto w-full max-w-72 rounded-lg border border-bark-100 bg-white"
+              className="mx-auto w-full max-w-72 rounded-2xl border border-bark-100 bg-white shadow-soft"
               src={qrUrl}
             />
           ) : (
-            <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-bark-200 bg-bark-50 text-center text-sm text-bark-500">
+            <div className="grid min-h-72 place-items-center rounded-2xl border border-dashed border-bark-200 bg-bark-50 text-center text-sm text-bark-500">
               Nhập số tiền và nội dung để xem QR.
             </div>
           )}
@@ -2309,11 +2403,11 @@ function SettingsPage({
         </Panel>
 
         <Panel className="grid content-start gap-4">
-          <div className="rounded-lg bg-bark-800 p-5 text-white">
+          <div className="rounded-2xl bg-[linear-gradient(135deg,#6b4423,#3a2415)] p-5 text-white shadow-[0_18px_35px_rgba(58,36,21,0.18),inset_0_1px_0_rgba(255,255,255,0.14)]">
             <WalletCards className="mb-4 h-8 w-8 text-bark-100" />
             <p className="text-sm font-semibold text-bark-100">{form.shopName || "Tên shop"}</p>
-            <p className="mt-2 text-2xl font-bold">{form.bankId || "MBBank"}</p>
-            <p className="mt-1 text-bark-100">{form.accountNo || "123456789"}</p>
+            <p className="mt-2 text-2xl font-black tracking-[-0.03em]">{form.bankId || "MBBank"}</p>
+            <p className="money-figures mt-1 text-bark-100">{form.accountNo || "123456789"}</p>
             <p className="mt-1 font-semibold">{form.accountName || "NGUYEN VAN A"}</p>
           </div>
           <Button className="w-full" icon={Save} type="submit">
@@ -2325,7 +2419,7 @@ function SettingsPage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <Panel className="grid gap-4">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-moss-700 text-white">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-moss-700 text-white">
               <Boxes className="h-5 w-5" />
             </span>
             <div>
@@ -2364,7 +2458,7 @@ function SettingsPage({
           )}
         >
           <h2 className="text-lg font-black text-bark-900">Cloud database</h2>
-          <p className="rounded-lg border border-bark-200/70 bg-cream-50/80 px-3 py-2 text-sm font-bold text-bark-700">
+          <p className="rounded-xl border border-bark-200/70 bg-cream-50/80 px-3 py-2 text-sm font-bold text-bark-700">
             Cloud row: {CLOUD_STATE_ID}
           </p>
           {cloudConfigured ? (
@@ -2382,13 +2476,13 @@ function SettingsPage({
       <div className="mt-4 grid gap-4 lg:grid-cols-[1fr_360px]">
         <Panel className="grid gap-4">
           <div className="flex items-start gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-bark-900 text-cream-50">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-bark-900 text-cream-50">
               <ShieldCheck className="h-5 w-5" />
             </span>
             <div>
               <h2 className="text-lg font-black text-bark-900">Mật khẩu truy cập</h2>
               <p className="mt-1 text-sm leading-6 text-bark-600">
-                Mật khẩu dashboard được lưu cục bộ bằng SHA-256 cho MVP cá nhân.
+                Mật khẩu dashboard được lưu cục bộ bằng SHA-256 cho app cá nhân của shop.
               </p>
             </div>
           </div>
@@ -2411,7 +2505,7 @@ function SettingsPage({
             </Field>
           </div>
           {passwordMessage ? (
-            <p className="rounded-lg border border-bark-200 bg-cream-50 px-3 py-2 text-sm font-semibold text-bark-700">
+            <p className="rounded-xl border border-bark-200 bg-cream-50 px-3 py-2 text-sm font-semibold text-bark-700">
               {passwordMessage}
             </p>
           ) : null}
@@ -2453,23 +2547,26 @@ function AppShell({ children, view, go, settings, toast }) {
   };
 
   return (
-    <div className="app-stage min-h-screen overflow-x-hidden pb-24 text-bark-900 lg:pb-0">
+    <div className="app-stage min-h-[100dvh] overflow-x-hidden pb-24 text-bark-900 lg:pb-0">
       <header className="sticky top-3 z-20 px-3">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 rounded-lg border border-bark-200/80 bg-cream-100/86 px-3 py-2.5 shadow-retro backdrop-blur sm:px-4">
+        <div className="floral-card mx-auto flex max-w-7xl items-center justify-between gap-3 rounded-[1.65rem] border border-bark-200/80 bg-cream-50/90 px-3 py-2.5 shadow-retro backdrop-blur sm:px-4">
           <button
-            className="focus-ring group flex min-w-0 items-center gap-3 rounded-lg text-left"
+            className="focus-ring group flex min-w-0 items-center gap-3 rounded-xl text-left"
             onClick={() => go("dashboard")}
           >
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-lg bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] transition group-hover:rotate-2">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.18)] tap-transition group-hover:rotate-2">
               <ShopLogo />
             </span>
             <span className="min-w-0">
-              <span className="block truncate text-base font-black text-bark-900">
+              <span className="block truncate text-base font-black tracking-[-0.02em] text-bark-900">
                 {settings.shopName || "banduthu"}
+              </span>
+              <span className="hidden text-[11px] font-black uppercase tracking-[0.16em] text-bark-500 sm:block">
+                Bảng bán hàng
               </span>
             </span>
           </button>
-          <div className="hidden items-center gap-1 rounded-lg border border-bark-100 bg-cream-50/70 p-1 lg:flex">
+          <div className="hidden items-center gap-1 rounded-xl border border-bark-100 bg-white/60 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)] lg:flex">
             {navItems.map((item) => (
               <Button
                 icon={item.icon}
@@ -2495,14 +2592,14 @@ function AppShell({ children, view, go, settings, toast }) {
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6 lg:py-9">{children}</main>
 
       <nav className="fixed inset-x-0 bottom-3 z-30 px-3 lg:hidden">
-        <div className="mx-auto grid max-w-lg grid-cols-5 gap-1 rounded-lg border border-bark-200/80 bg-cream-100/92 p-1.5 shadow-retro backdrop-blur">
+        <div className="floral-card mx-auto grid max-w-lg grid-cols-5 gap-1 rounded-[1.65rem] border border-bark-200/80 bg-cream-50/95 p-1.5 shadow-retro backdrop-blur">
           {navItems.map((item) => {
             const Icon = item.icon;
             const active = navActive(item.page);
             return (
               <button
                 className={cn(
-                  "focus-ring grid min-h-14 place-items-center gap-1 rounded-lg px-1 text-[11px] font-black transition duration-200 active:translate-y-px",
+                  "focus-ring tap-transition grid min-h-14 place-items-center gap-1 rounded-xl px-1 text-[11px] font-black active:translate-y-px",
                   active
                     ? "bg-bark-900 text-cream-50 shadow-[inset_0_1px_0_rgba(255,255,255,0.16)]"
                     : "text-bark-500 hover:bg-bark-100/70",
@@ -2540,6 +2637,7 @@ export default function App() {
   const [view, setView] = useState({ page: "dashboard" });
   const [toast, setToast] = useState("");
   const [deleteOrderCandidate, setDeleteOrderCandidate] = useState(null);
+  const [cancelOrderCandidate, setCancelOrderCandidate] = useState(null);
   const [cloudStatus, setCloudStatus] = useState(
     SUPABASE_CONFIGURED ? "Đang kiểm tra kết nối." : "",
   );
@@ -2835,15 +2933,22 @@ export default function App() {
     shippingFee,
     discount,
     subtotal,
-    totalAmount,
     prepaidAmount = 0,
-    remainingAmount,
     paymentStatus,
     transferContent,
     qrImageUrl,
   }) => {
     const timestamp = nowIso();
-    const payment = calculatePayment(totalAmount, prepaidAmount);
+    const normalizedSubtotal =
+      toNumber(subtotal) ||
+      selectedProducts.reduce((sum, product) => sum + toNumber(product.sellingPrice), 0);
+    const normalizedShippingFee = toNumber(shippingFee);
+    const normalizedDiscount = toNumber(discount);
+    const normalizedTotalAmount = Math.max(
+      0,
+      normalizedSubtotal + normalizedShippingFee - normalizedDiscount,
+    );
+    const payment = calculatePayment(normalizedTotalAmount, prepaidAmount);
     const nextPaymentStatus = paymentStatus || payment.paymentStatus;
     const nextStatus = nextPaymentStatus === "paid" ? "paid" : "waiting_payment";
     const revenueEvents =
@@ -2874,12 +2979,12 @@ export default function App() {
         sellingPrice: toNumber(product.sellingPrice),
         imageUrl: product.imageUrl,
       })),
-      subtotal,
-      shippingFee,
-      discount,
-      totalAmount,
+      subtotal: normalizedSubtotal,
+      shippingFee: normalizedShippingFee,
+      discount: normalizedDiscount,
+      totalAmount: normalizedTotalAmount,
       prepaidAmount: payment.prepaidAmount,
-      remainingAmount: remainingAmount ?? payment.remainingAmount,
+      remainingAmount: payment.remainingAmount,
       status: nextStatus,
       paymentStatus: nextPaymentStatus,
       revenueEvents,
@@ -2908,8 +3013,13 @@ export default function App() {
   const updateOrderPayment = (orderId, prepaidAmount) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
+    if (order.status === "cancelled") {
+      setToast("Đơn đã hủy không cập nhật thanh toán");
+      return;
+    }
     const timestamp = nowIso();
-    const payment = calculatePayment(order.totalAmount, prepaidAmount);
+    const orderTotal = getOrderTotalAmount(order);
+    const payment = calculatePayment(orderTotal, prepaidAmount);
     const revenueDelta = getRevenueDelta(order, payment.prepaidAmount);
     const nextRevenueEvents =
       revenueDelta !== 0
@@ -2970,7 +3080,7 @@ export default function App() {
   const markOrderPaid = (orderId) => {
     const order = orders.find((item) => item.id === orderId);
     if (!order) return;
-    updateOrderPayment(orderId, order.totalAmount);
+    updateOrderPayment(orderId, getOrderTotalAmount(order));
   };
 
   const requestDeleteOrder = (order) => {
@@ -3007,15 +3117,84 @@ export default function App() {
     }
   };
 
+  const requestCancelOrder = (order) => {
+    setCancelOrderCandidate(order);
+  };
+
+  const cancelCancelOrder = () => {
+    setCancelOrderCandidate(null);
+  };
+
+  const confirmCancelOrder = (refundPayment = false) => {
+    if (!cancelOrderCandidate) return;
+
+    const order = cancelOrderCandidate;
+    const timestamp = nowIso();
+    const receivedAmount = Math.max(0, getOrderRevenueAmount(order));
+    const shouldRefund = refundPayment && receivedAmount > 0;
+
+    setOrders((current) =>
+      current.map((item) => {
+        if (item.id !== order.id) return item;
+
+        const currentRevenueEvents = getOrderRevenueEvents(item);
+        const nextRevenueEvents = shouldRefund
+          ? [
+              ...currentRevenueEvents,
+              makeRevenueEvent(-receivedAmount, "refund", timestamp),
+            ]
+          : currentRevenueEvents;
+
+        return {
+          ...item,
+          status: "cancelled",
+          ...(shouldRefund
+            ? {
+                prepaidAmount: 0,
+                remainingAmount: 0,
+                paymentStatus: "refunded",
+                refundedAmount: receivedAmount,
+                refundedAt: timestamp,
+              }
+            : {}),
+          revenueEvents: nextRevenueEvents,
+          updatedAt: timestamp,
+        };
+      }),
+    );
+
+    setProducts((current) =>
+      current.map((product) =>
+        order.items.some((item) => item.id === product.id)
+          ? { ...product, status: "available", updatedAt: timestamp }
+          : product,
+      ),
+    );
+
+    setCancelOrderCandidate(null);
+    setToast(
+      shouldRefund
+        ? "Đã hủy đơn và trừ tiền hoàn"
+        : "Đã hủy đơn, hàng về còn hàng",
+    );
+  };
+
   const setOrderStatus = (orderId, status) => {
     const order = orders.find((item) => item.id === orderId);
+    if (!order) return;
+
+    if (status === "cancelled") {
+      requestCancelOrder(order);
+      return;
+    }
+
     const timestamp = nowIso();
-    const shouldComplete = status === "completed" && order;
+    const shouldComplete = status === "completed";
     const completedPayment = shouldComplete
-      ? calculatePayment(order.totalAmount, order.totalAmount)
+      ? calculatePayment(getOrderTotalAmount(order), getOrderTotalAmount(order))
       : null;
     const completionRevenueDelta = shouldComplete
-      ? getRevenueDelta(order, order.totalAmount)
+      ? getRevenueDelta(order, getOrderTotalAmount(order))
       : 0;
     const completionRevenueEvents =
       shouldComplete && completionRevenueDelta !== 0
@@ -3052,16 +3231,6 @@ export default function App() {
         current.map((product) =>
           order.items.some((item) => item.id === product.id)
             ? { ...product, status: "sold", updatedAt: timestamp }
-            : product,
-        ),
-      );
-    }
-
-    if (status === "cancelled" && order && order.paymentStatus !== "paid") {
-      setProducts((current) =>
-        current.map((product) =>
-          order.items.some((item) => item.id === product.id)
-            ? { ...product, status: "available", updatedAt: timestamp }
             : product,
         ),
       );
@@ -3173,6 +3342,11 @@ export default function App() {
         onCancel={cancelDeleteOrder}
         onConfirm={confirmDeleteOrder}
         order={deleteOrderCandidate}
+      />
+      <ConfirmCancelOrderModal
+        onCancel={cancelCancelOrder}
+        onConfirm={confirmCancelOrder}
+        order={cancelOrderCandidate}
       />
     </AppShell>
   );
